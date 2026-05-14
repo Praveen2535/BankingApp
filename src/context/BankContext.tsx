@@ -33,6 +33,8 @@ const MOCK_RECIPIENTS: Record<string, string> = {
   '9988776655': 'Priya Singh',
   '5544332211': 'Vikram Mehra',
   '1234567890': 'Ananya Reddy',
+  '1212121212': 'Anonymous Shell Corp (Flagged)',
+  '5555555555': 'High-Velocity Merchant (Auth Required)',
 };
 
 export const BankProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -232,12 +234,11 @@ export const BankProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       throw new Error('Not found in API');
     } catch (error) {
-      // 2. Fallback to local mock data if API is unavailable (common in Vercel/Static deployments)
+      // 2. Fallback to local mock data if API is unavailable
       console.warn(`[Bank Simulation] API unreachable or user not found. Falling back to local data for account: ${accNumber}`);
       const name = MOCK_RECIPIENTS[accNumber];
       
-      // Artificial delay to simulate network
-      await new Promise(r => setTimeout(r, 500));
+      await new Promise(r => setTimeout(r, 600));
       
       setLoading(false);
       return name 
@@ -253,16 +254,37 @@ export const BankProvider: React.FC<{ children: React.ReactNode }> = ({ children
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ amount, accNumber }),
       });
-      if (resp.ok) {
-        return await resp.json();
-      }
+      if (resp.ok) return await resp.json();
       throw new Error('API Error');
     } catch (error) {
-      console.warn('[Bank AI] AI Risk Assessment API unavailable. Using embedded safety model (LOW RISK default).');
+      // ENHANCED SIMULATION FOR TESTING (Vercel/Offline Support)
+      await new Promise(r => setTimeout(r, 800));
+
+      // 1. Explicit High-Risk Test Scenario
+      if (accNumber === '1212121212' || amount > 100000) {
+        console.warn('[Bank AI] HIGH RISK Triggered (Local Simulation)');
+        return { 
+          fraud_score: 0.98, 
+          risk_level: 'HIGH', 
+          reason: 'Entity detected in AML blacklist (High-Risk Flag).' 
+        };
+      }
+
+      // 2. Explicit Medium-Risk Test Scenario (Triggers 2FA)
+      if (accNumber === '5555555555' || amount > 25000) {
+        console.warn('[Bank AI] MEDIUM RISK Triggered (Local Simulation)');
+        return { 
+          fraud_score: 0.65, 
+          risk_level: 'MEDIUM', 
+          reason: 'Transaction exceeds typical user velocity patterns.' 
+        };
+      }
+
+      // 3. Default Low Risk
       return { 
-        fraud_score: 0.1, 
+        fraud_score: 0.05, 
         risk_level: 'LOW', 
-        reason: 'Local Safety Check: Standard amount' 
+        reason: 'Local Safety Check: Clean history.' 
       };
     }
   };

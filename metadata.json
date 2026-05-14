@@ -1,6 +1,6 @@
 {
   "name": "Indus Banking",
-  "description": "Premium, high-fidelity digital banking experience with biometric security, real-time INR transaction logic, and intelligent transfer flows.",
+  "description": "Next-gen Digital Bank featuring Kafka-driven event streaming, real-time AI fraud detection (XGBoost logic), and high-security biometric transaction flows.",
   "requestFramePermissions": [],
   "majorCapabilities": []
 }
