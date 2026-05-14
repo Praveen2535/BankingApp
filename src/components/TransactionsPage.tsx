@@ -29,6 +29,9 @@ export default function TransactionsPage({ onBack }: TransactionsPageProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'completed' | 'failed' | 'processing'>('all');
   const [typeFilter, setTypeFilter] = useState<'all' | 'credit' | 'debit'>('all');
+  const [categoryFilter, setCategoryFilter] = useState<'all' | Transaction['category']>('all');
+  const [dateStart, setDateStart] = useState('');
+  const [dateEnd, setDateEnd] = useState('');
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest' | 'amount-high' | 'amount-low'>('newest');
 
   const filteredAndSortedTransactions = useMemo(() => {
@@ -54,6 +57,21 @@ export default function TransactionsPage({ onBack }: TransactionsPageProps) {
       result = result.filter(tx => tx.type === typeFilter);
     }
 
+    // Category Filter
+    if (categoryFilter !== 'all') {
+      result = result.filter(tx => tx.category === categoryFilter);
+    }
+
+    // Date Range Filter
+    if (dateStart) {
+      const start = new Date(dateStart).getTime();
+      result = result.filter(tx => new Date(tx.date).getTime() >= start);
+    }
+    if (dateEnd) {
+      const end = new Date(dateEnd).getTime() + (24 * 60 * 60 * 1000) - 1; // End of day
+      result = result.filter(tx => new Date(tx.date).getTime() <= end);
+    }
+
     // Sorting
     result.sort((a, b) => {
       const dateA = new Date(a.date).getTime();
@@ -69,7 +87,9 @@ export default function TransactionsPage({ onBack }: TransactionsPageProps) {
     });
 
     return result;
-  }, [transactions, searchTerm, statusFilter, typeFilter, sortOrder]);
+  }, [transactions, searchTerm, statusFilter, typeFilter, categoryFilter, dateStart, dateEnd, sortOrder]);
+
+  const categories: Transaction['category'][] = ['Transfer', 'Shopping', 'Food', 'Bills', 'Investment', 'Salary'];
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-200" id="transactions-page">
@@ -106,6 +126,24 @@ export default function TransactionsPage({ onBack }: TransactionsPageProps) {
               />
             </div>
             
+            {/* Date Range Inputs */}
+            <div className="flex items-center gap-2 bg-slate-950 border border-slate-800 rounded-2xl px-4 py-1">
+              <Calendar className="text-slate-500 mr-1" size={18} />
+              <input 
+                type="date"
+                value={dateStart}
+                onChange={(e) => setDateStart(e.target.value)}
+                className="bg-transparent text-sm text-white focus:outline-none py-2 cursor-pointer"
+              />
+              <span className="text-slate-700">to</span>
+              <input 
+                type="date"
+                value={dateEnd}
+                onChange={(e) => setDateEnd(e.target.value)}
+                className="bg-transparent text-sm text-white focus:outline-none py-2 cursor-pointer"
+              />
+            </div>
+
             {/* Sort Dropdown */}
             <div className="relative group">
               <select 
@@ -123,49 +161,70 @@ export default function TransactionsPage({ onBack }: TransactionsPageProps) {
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-2 mr-2">
-              <Filter size={16} className="text-slate-500" />
-              <span className="text-xs font-bold text-slate-500 uppercase">Filters:</span>
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2 mr-2">
+                <Filter size={16} className="text-slate-500" />
+                <span className="text-xs font-bold text-slate-500 uppercase">Status & Type:</span>
+              </div>
+              
+              <FilterChip 
+                active={typeFilter === 'all'} 
+                onClick={() => setTypeFilter('all')} 
+                label="All Types" 
+              />
+              <FilterChip 
+                active={typeFilter === 'credit'} 
+                onClick={() => setTypeFilter('credit')} 
+                label="Credits" 
+                color="emerald"
+              />
+              <FilterChip 
+                active={typeFilter === 'debit'} 
+                onClick={() => setTypeFilter('debit')} 
+                label="Debits" 
+                color="rose"
+              />
+
+              <div className="h-4 w-px bg-slate-800 mx-2 hidden sm:block" />
+
+              <FilterChip 
+                active={statusFilter === 'all'} 
+                onClick={() => setStatusFilter('all')} 
+                label="All Status" 
+              />
+              <FilterChip 
+                active={statusFilter === 'completed'} 
+                onClick={() => setStatusFilter('completed')} 
+                label="Completed" 
+              />
+              <FilterChip 
+                active={statusFilter === 'failed'} 
+                onClick={() => setStatusFilter('failed')} 
+                label="Failed" 
+              />
             </div>
-            
-            {/* Type Filter Chips */}
-            <FilterChip 
-              active={typeFilter === 'all'} 
-              onClick={() => setTypeFilter('all')} 
-              label="All Types" 
-            />
-            <FilterChip 
-              active={typeFilter === 'credit'} 
-              onClick={() => setTypeFilter('credit')} 
-              label="Credits" 
-              color="emerald"
-            />
-            <FilterChip 
-              active={typeFilter === 'debit'} 
-              onClick={() => setTypeFilter('debit')} 
-              label="Debits" 
-              color="rose"
-            />
 
-            <div className="h-4 w-px bg-slate-800 mx-2 hidden sm:block" />
-
-            {/* Status Filter Chips */}
-            <FilterChip 
-              active={statusFilter === 'all'} 
-              onClick={() => setStatusFilter('all')} 
-              label="All Status" 
-            />
-            <FilterChip 
-              active={statusFilter === 'completed'} 
-              onClick={() => setStatusFilter('completed')} 
-              label="Completed" 
-            />
-            <FilterChip 
-              active={statusFilter === 'failed'} 
-              onClick={() => setStatusFilter('failed')} 
-              label="Failed" 
-            />
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2 mr-2">
+                <Filter size={16} className="text-slate-500" />
+                <span className="text-xs font-bold text-slate-500 uppercase">Categories:</span>
+              </div>
+              
+              <FilterChip 
+                active={categoryFilter === 'all'} 
+                onClick={() => setCategoryFilter('all')} 
+                label="All Categories" 
+              />
+              {categories.map(cat => (
+                <FilterChip 
+                  key={cat}
+                  active={categoryFilter === cat} 
+                  onClick={() => setCategoryFilter(cat)} 
+                  label={cat} 
+                />
+              ))}
+            </div>
           </div>
         </section>
 
@@ -190,6 +249,9 @@ export default function TransactionsPage({ onBack }: TransactionsPageProps) {
                       setSearchTerm('');
                       setStatusFilter('all');
                       setTypeFilter('all');
+                      setCategoryFilter('all');
+                      setDateStart('');
+                      setDateEnd('');
                     }}
                     className="text-emerald-500 font-bold hover:underline"
                   >
@@ -209,17 +271,17 @@ export default function TransactionsPage({ onBack }: TransactionsPageProps) {
   );
 }
 
-function FilterChip({ 
-  active, 
-  onClick, 
-  label, 
-  color = 'slate' 
-}: { 
+const FilterChip: React.FC<{ 
   active: boolean; 
   onClick: () => void; 
   label: string;
   color?: 'slate' | 'emerald' | 'rose';
-}) {
+}> = ({ 
+  active, 
+  onClick, 
+  label, 
+  color = 'slate' 
+}) => {
   const colorClasses = {
     slate: active ? 'bg-white text-slate-950 border-white' : 'bg-slate-950 text-slate-400 border-slate-800 hover:border-slate-700',
     emerald: active ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-slate-950 text-emerald-500/70 border-emerald-500/20 hover:border-emerald-500/40',
@@ -237,40 +299,72 @@ function FilterChip({
 }
 
 const TransactionRow: React.FC<{ tx: Transaction }> = ({ tx }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+
   return (
-    <motion.div 
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      className="p-6 flex flex-col sm:flex-row sm:items-center justify-between hover:bg-slate-800/30 transition-all cursor-pointer group"
-    >
-      <div className="flex items-center gap-5">
-        <div className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-105 ${
-          tx.type === 'credit' ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-500 border border-rose-500/20'
-        }`}>
-          {tx.type === 'credit' ? <ArrowDownLeft size={24} /> : <ArrowUpRight size={24} />}
-        </div>
-        <div>
-          <h3 className="font-bold text-white text-lg group-hover:text-emerald-400 transition-colors uppercase tracking-tight">{tx.recipient}</h3>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-            <span className="text-slate-400 font-medium">{tx.category}</span>
-            <span className="text-slate-700">•</span>
-            <span className="text-slate-500">{new Date(tx.date).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</span>
+    <div className="border-b border-slate-800/50 last:border-0 overflow-hidden">
+      <motion.div 
+        layout
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="p-6 flex flex-col sm:flex-row sm:items-center justify-between hover:bg-slate-800/30 transition-all cursor-pointer group relative"
+      >
+        <div className="flex items-center gap-5">
+          <div className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-105 ${
+            tx.type === 'credit' ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-500 border border-rose-500/20'
+          }`}>
+            {tx.type === 'credit' ? <ArrowDownLeft size={24} /> : <ArrowUpRight size={24} />}
+          </div>
+          <div>
+            <h3 className="font-bold text-white text-lg group-hover:text-emerald-400 transition-colors uppercase tracking-tight">{tx.recipient}</h3>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+              <span className="text-slate-400 font-medium">{tx.category}</span>
+              <span className="text-slate-700">•</span>
+              <span className="text-slate-500">{new Date(tx.date).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</span>
+            </div>
           </div>
         </div>
-      </div>
 
-      <div className="mt-4 sm:mt-0 text-left sm:text-right flex items-center sm:flex-col justify-between sm:justify-center gap-2">
-        <p className={`text-xl font-bold font-mono ${tx.type === 'credit' ? 'text-emerald-500' : 'text-white'}`}>
-          {tx.type === 'credit' ? '+' : '-'}{formatCurrency(tx.amount)}
-        </p>
-        <span className={`text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full border ${
-          tx.status === 'completed' ? 'bg-emerald-500/5 text-emerald-500 border-emerald-500/20' : 
-          tx.status === 'failed' ? 'bg-rose-500/5 text-rose-500 border-rose-500/20' : 
-          'bg-amber-500/5 text-amber-500 border-amber-500/20'
-        }`}>
-          {tx.status}
-        </span>
-      </div>
-    </motion.div>
+        <div className="mt-4 sm:mt-0 text-left sm:text-right flex items-center sm:flex-col justify-between sm:justify-center gap-2">
+          <p className={`text-xl font-bold font-mono ${tx.type === 'credit' ? 'text-emerald-500' : 'text-white'}`}>
+            {tx.type === 'credit' ? '+' : '-'}{formatCurrency(tx.amount)}
+          </p>
+          <div className="flex items-center gap-3">
+            <span className={`text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full border ${
+              tx.status === 'completed' ? 'bg-emerald-500/5 text-emerald-500 border-emerald-500/20' : 
+              tx.status === 'failed' ? 'bg-rose-500/5 text-rose-500 border-rose-500/20' : 
+              'bg-amber-500/5 text-amber-500 border-amber-500/20'
+            }`}>
+              {tx.status}
+            </span>
+            <ChevronDown size={14} className={`text-slate-600 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
+          </div>
+        </div>
+      </motion.div>
+
+      <motion.div
+        initial={false}
+        animate={{ height: isExpanded ? 'auto' : 0, opacity: isExpanded ? 1 : 0 }}
+        transition={{ duration: 0.3, ease: 'easeInOut' }}
+        className="bg-slate-950/40 border-t border-slate-800/30 overflow-hidden"
+      >
+        <div className="px-6 py-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          <div className="space-y-1">
+            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Transaction ID</p>
+            <p className="text-sm font-mono text-slate-300 select-all">{tx.id}</p>
+          </div>
+          <div className="space-y-1">
+            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Recipient Account</p>
+            <p className="text-sm font-mono text-slate-300">{tx.accountNumber || 'N/A'}</p>
+          </div>
+          <div className="space-y-1">
+            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Reference Status</p>
+            <div className="flex items-center gap-2">
+              <div className={`w-2 h-2 rounded-full ${tx.status === 'completed' ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+              <p className="text-sm text-slate-300">Transaction hash verified by system</p>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+    </div>
   );
 }

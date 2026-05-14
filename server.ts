@@ -7,9 +7,45 @@ import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
+import { kafkaBroker, KafkaTopic } from "./src/lib/kafka-service.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// --- Kafka Background Consumers (Async Side Effects) ---
+
+// 1. Consumer: Audit Logger
+kafkaBroker.subscribe("transactions", (msg) => {
+  const value = msg.value as { amount: number };
+  console.log(`[Kafka Audit] Logged transaction ${msg.key} - Amount: ${value.amount}`);
+});
+
+// 2. Consumer: Fraud Analysis Engine
+kafkaBroker.subscribe("transactions", async (msg) => {
+  const { amount, accNumber, txId } = msg.value as { amount: number, accNumber: string, txId: string };
+  
+  // Simulate AI Processing Latency
+  await new Promise(r => setTimeout(r, 800));
+  
+  const result = calculateFraudScore(Number(amount), accNumber);
+  
+  if (result.risk_level === 'HIGH') {
+    kafkaBroker.publish("security_alerts", txId, {
+      type: "FRAUD_ATTEMPT",
+      severity: "CRITICAL",
+      reason: result.reason,
+      details: `Account ${accNumber} flagged for ${amount}`,
+      timestamp: Date.now()
+    });
+  } else {
+    // Standard processing
+    kafkaBroker.publish("user_notifications", txId, {
+      type: "TRANSACTION_CONFIRMED",
+      message: `Transfer of ${amount} was successful.`,
+      timestamp: Date.now()
+    });
+  }
+});
 
 // --- Fraud Detection Logic ---
 
@@ -96,12 +132,36 @@ async function startServer() {
   });
 
   app.post("/api/predict", (req, res) => {
-    const { amount, accNumber } = req.body;
-    const result = calculateFraudScore(Number(amount), accNumber);
-    if (result.risk_level !== 'HIGH') {
-      RECENT_TXS.push({ amount, timestamp: Date.now() });
-    }
-    res.json(result);
+    const { amount, accNumber, txId = `tx_${Date.now()}` } = req.body;
+    
+    // Produce event to Kafka instead of blocking for processing
+    kafkaBroker.publish("transactions", txId, {
+      amount,
+      accNumber,
+      txId,
+      timestamp: Date.now()
+    });
+
+    res.json({ status: "ACCEPTED", txId, message: "Transaction queued for processing via Kafka" });
+  });
+
+  // --- Real-time Kafka Stream (SSE) ---
+  app.get("/api/stream", (req, res) => {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders();
+
+    const onEvent = ({ topic, message }: { topic: KafkaTopic, message: any }) => {
+      res.write(`data: ${JSON.stringify({ topic, ...message })}\n\n`);
+    };
+
+    kafkaBroker.on("broadcast", onEvent);
+
+    req.on("close", () => {
+      kafkaBroker.off("broadcast", onEvent);
+      res.end();
+    });
   });
 
   // Admin and Profile APIs (Simulated)

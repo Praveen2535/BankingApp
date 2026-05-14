@@ -14,7 +14,8 @@ import {
   ChevronRight, 
   Lock,
   ArrowRight,
-  RefreshCw
+  RefreshCw,
+  ArrowLeft
 } from 'lucide-react';
 import { useBank } from '../context/BankContext';
 import { formatCurrency } from '../types';
@@ -27,7 +28,7 @@ interface TransferFlowProps {
 type Step = 'search' | 'amount' | 'pin' | 'processing' | 'success' | '2fa';
 
 export default function TransferFlow({ onClose }: TransferFlowProps) {
-  const { verifyRecipient, processTransfer, user, checkRisk } = useBank();
+  const { verifyRecipient, processTransfer, user, checkRisk, addNotification } = useBank();
   
   const [step, setStep] = useState<Step>('search');
   const [accountNumber, setAccountNumber] = useState('');
@@ -37,6 +38,7 @@ export default function TransferFlow({ onClose }: TransferFlowProps) {
   const [pin, setPin] = useState(['', '', '', '']);
   const [isProcessing, setIsProcessing] = useState(false);
   const [riskData, setRiskData] = useState<{ score: number, level: string, reason: string } | null>(null);
+  const [isBlocked, setIsBlocked] = useState(false);
 
   const handleSearch = async () => {
     if (accountNumber.length < 10) return;
@@ -102,13 +104,19 @@ export default function TransferFlow({ onClose }: TransferFlowProps) {
 
     if (risk.risk_level === 'HIGH') {
       await new Promise(resolve => setTimeout(resolve, 1500)); // Dramatic pause
+      setIsBlocked(true);
       setStep('amount');
       setError(`ACTION BLOCKED: ${risk.reason}. Our AI core (XGBoost) flagged this transaction as potentially fraudulent.`);
+      addNotification(
+        'Transaction Blocked',
+        `An attempt to transfer ${formatCurrency(parseFloat(amount))} was blocked by AI Security: ${risk.reason}`,
+        'security'
+      );
       return;
     }
 
-    // Two-Factor Auth for large transfers
-    if (parseFloat(amount) > 15000) {
+    // MANDATORY 2FA for Medium Risk or large transfers
+    if (risk.risk_level === 'MEDIUM' || parseFloat(amount) > 15000) {
       setStep('2fa');
       return;
     }
@@ -121,9 +129,19 @@ export default function TransferFlow({ onClose }: TransferFlowProps) {
     
     if (success) {
       setStep('success');
+      addNotification(
+        'Transfer Successful',
+        `Successfully transferred ${formatCurrency(parseFloat(amount))} to ${recipient!.name}.`,
+        'info'
+      );
     } else {
       setStep('amount');
       setError("Transaction failed. Try again.");
+      addNotification(
+        'Transfer Failed',
+        `The transfer of ${formatCurrency(parseFloat(amount))} to ${recipient!.name} was unsuccessful.`,
+        'alert'
+      );
     }
   };
 
@@ -225,7 +243,11 @@ export default function TransferFlow({ onClose }: TransferFlowProps) {
                       type="number"
                       placeholder="0"
                       value={amount}
-                      onChange={(e) => setAmount(e.target.value)}
+                      onChange={(e) => {
+                        setAmount(e.target.value);
+                        if (isBlocked) setIsBlocked(false);
+                        if (error) setError(null);
+                      }}
                       className="bg-transparent text-white text-5xl font-bold w-full text-center focus:outline-none placeholder:text-slate-800"
                     />
                   </div>
@@ -240,11 +262,15 @@ export default function TransferFlow({ onClose }: TransferFlowProps) {
                 )}
 
                 <button 
-                  onClick={handleAmountSubmit}
-                  className="w-full bg-emerald-500 text-white font-bold py-4 rounded-2xl shadow-lg hover:bg-emerald-600 transition-all flex items-center justify-center gap-2 text-lg"
+                  onClick={isBlocked ? () => setStep('search') : handleAmountSubmit}
+                  className={`w-full ${isBlocked ? 'bg-slate-800 hover:bg-slate-700' : 'bg-emerald-500 hover:bg-emerald-600'} text-white font-bold py-4 rounded-2xl shadow-lg transition-all flex items-center justify-center gap-2 text-lg`}
                   id="confirm-amount-btn"
                 >
-                  Continue <ArrowRight size={20} />
+                  {isBlocked ? (
+                    <><ArrowLeft size={20} /> Back to Search</>
+                  ) : (
+                    <>Continue <ArrowRight size={20} /></>
+                  )}
                 </button>
               </motion.div>
             )}
@@ -381,8 +407,12 @@ export default function TransferFlow({ onClose }: TransferFlowProps) {
             {step === '2fa' && (
               <TwoFactorModal 
                 key="step-2fa"
-                title="Verify Transfer"
-                description={`A security code has been sent to your email to authorize the transfer of ${formatCurrency(parseFloat(amount))}.`}
+                title={riskData?.level === 'MEDIUM' ? "AI Security Verification" : "Verify Transfer"}
+                description={
+                  riskData?.level === 'MEDIUM' 
+                    ? `Our AI detected a potential risk (${riskData.reason}). Please enter the security code sent to your email to continue.`
+                    : `A security code has been sent to your email to authorize the transfer of ${formatCurrency(parseFloat(amount))}.`
+                }
                 onVerify={executeTransfer}
                 onCancel={() => setStep('pin')}
               />

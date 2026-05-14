@@ -14,7 +14,7 @@ interface AddFundsModalProps {
 }
 
 export default function AddFundsModal({ onClose }: AddFundsModalProps) {
-  const { addFunds } = useBank();
+  const { addFunds, addNotification } = useBank();
   const [amount, setAmount] = useState('');
   const [status, setStatus] = useState<'input' | 'processing' | 'success'>('input');
 
@@ -25,6 +25,11 @@ export default function AddFundsModal({ onClose }: AddFundsModalProps) {
     setStatus('processing');
     await addFunds(val);
     setStatus('success');
+    addNotification(
+      'Funds Added',
+      `Successfully deposited ${formatCurrency(val)} into your account.`,
+      'info'
+    );
   };
 
   return (

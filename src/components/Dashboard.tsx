@@ -16,7 +16,8 @@ import {
   LayoutDashboard,
   User as UserIcon,
   CreditCard,
-  Settings
+  Settings,
+  Activity
 } from 'lucide-react';
 import { useBank } from '../context/BankContext';
 import { formatCurrency } from '../types';
@@ -27,10 +28,12 @@ interface DashboardProps {
   onAddFunds: () => void;
   onProfile: () => void;
   onAdmin: () => void;
+  onShowNotifications: () => void;
 }
 
-export default function Dashboard({ onTransfer, onViewAll, onAddFunds, onProfile, onAdmin }: DashboardProps) {
-  const { user, transactions } = useBank();
+export default function Dashboard({ onTransfer, onViewAll, onAddFunds, onProfile, onAdmin, onShowNotifications }: DashboardProps) {
+  const { user, transactions, notifications } = useBank();
+  const unreadCount = notifications.filter(n => !n.read).length;
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-200 flex" id="dashboard">
@@ -43,6 +46,9 @@ export default function Dashboard({ onTransfer, onViewAll, onAddFunds, onProfile
 
         <nav className="flex-1 space-y-2">
           <NavItem icon={<LayoutDashboard size={20} />} label="Dashboard" active />
+          {user.role === 'admin' && (
+            <NavItem icon={<Activity size={20} />} label="Admin Center" onClick={onAdmin} />
+          )}
           <NavItem icon={<ArrowUpDown size={20} />} label="Transactions" onClick={onViewAll} />
           <NavItem icon={<CreditCard size={20} />} label="My Cards" />
           <NavItem icon={<UserIcon size={20} />} label="Profile" onClick={onProfile} />
@@ -72,7 +78,7 @@ export default function Dashboard({ onTransfer, onViewAll, onAddFunds, onProfile
             {user.role === 'admin' && (
               <button 
                 onClick={onAdmin}
-                className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-rose-500/10 text-rose-500 border border-rose-500/20 rounded-lg text-xs font-bold uppercase"
+                className="flex items-center gap-2 px-3 py-1.5 bg-rose-500/10 text-rose-500 border border-rose-500/20 rounded-lg text-xs font-bold uppercase transition-transform active:scale-95"
               >
                 Admin Panel
               </button>
@@ -80,9 +86,14 @@ export default function Dashboard({ onTransfer, onViewAll, onAddFunds, onProfile
             <button className="p-2 hover:bg-slate-900 rounded-full text-slate-400 transition-colors">
               <Search size={22} />
             </button>
-            <button className="p-2 hover:bg-slate-900 rounded-full text-slate-400 transition-colors relative">
+            <button 
+              onClick={onShowNotifications}
+              className="p-2 hover:bg-slate-900 rounded-full text-slate-400 transition-colors relative"
+            >
               <Bell size={22} />
-              <span className="absolute top-2 right-2 w-2 h-2 bg-rose-500 rounded-full border-2 border-slate-950" />
+              {unreadCount > 0 && (
+                <span className="absolute top-2 right-2 w-2.5 h-2.5 bg-rose-500 rounded-full border-2 border-slate-950 animate-pulse" />
+              )}
             </button>
           </div>
         </header>

@@ -26,6 +26,15 @@ export interface User {
   role: 'user' | 'admin';
 }
 
+export interface AppNotification {
+  id: string;
+  title: string;
+  message: string;
+  type: 'security' | 'info' | 'alert';
+  date: string;
+  read: boolean;
+}
+
 export const formatCurrency = (amount: number) => {
   return new Intl.NumberFormat('en-IN', {
     style: 'currency',

@@ -17,6 +17,7 @@ import AdminPanel from './components/AdminPanel';
 import TransferFlow from './components/TransferFlow';
 import AddFundsModal from './components/AddFundsModal';
 import ProfileModal from './components/ProfileModal';
+import NotificationDrawer from './components/NotificationDrawer';
 import { AnimatePresence } from 'motion/react';
 
 function AppContent() {
@@ -24,6 +25,7 @@ function AppContent() {
   const [showTransfer, setShowTransfer] = useState(false);
   const [showAddFunds, setShowAddFunds] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
   const [view, setView] = useState<'dashboard' | 'transactions' | 'admin'>('dashboard');
 
   if (!user.isRegistered) {
@@ -39,6 +41,7 @@ function AppContent() {
           onAddFunds={() => setShowAddFunds(true)}
           onProfile={() => setShowProfile(true)}
           onAdmin={() => setView('admin')}
+          onShowNotifications={() => setShowNotifications(true)}
         />
       ) : view === 'transactions' ? (
         <TransactionsPage onBack={() => setView('dashboard')} />
@@ -54,6 +57,9 @@ function AppContent() {
       </AnimatePresence>
       <AnimatePresence>
         {showProfile && <ProfileModal onClose={() => setShowProfile(false)} />}
+      </AnimatePresence>
+      <AnimatePresence>
+        {showNotifications && <NotificationDrawer onClose={() => setShowNotifications(false)} />}
       </AnimatePresence>
     </>
   );
