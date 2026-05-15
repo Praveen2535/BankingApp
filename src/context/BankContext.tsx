@@ -5,6 +5,7 @@
 
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { Transaction, User, AppNotification } from '../types';
+import { supabase } from '../lib/supabase';
 
 interface BankContextType {
   user: User;
@@ -27,109 +28,152 @@ interface BankContextType {
 
 const BankContext = createContext<BankContextType | undefined>(undefined);
 
+// Checking if keys are real
+const isSupabaseLive = import.meta.env.VITE_SUPABASE_URL && !import.meta.env.VITE_SUPABASE_URL.includes('placeholder');
+
 // Mock "Backend" Database
 const MOCK_RECIPIENTS: Record<string, string> = {
-  '1122334455': 'Aarav Sharma',
+  // --- AUTHORIZED PERSONS (LOW RISK) ---
+  '1122334455': 'Aarav Sharma (Verified Investor)',
+  '2233445566': 'Sara Khan (Premium Merchant)',
+  '3344556677': 'City Heights (Lease Utilities)',
+  '2220502205': 'Reliance Retail (Verified)',
+  '3789678934': 'Karan Malhotra (Family)',
+  
+  // --- FLAG / BLOCKED PERSONS (HIGH/MEDIUM RISK) ---
+  '8888888888': 'Global Shell Corp (Blocked Entity)',
+  '7777777777': 'Unverified Crypto Gateway',
+  '6666666666': 'Offshore Travel Agent (Review Req)',
+  '3456723452': 'New Tech Logistics (Review)',
+  '5432167890': 'Flagged Suspicious Node',
+  
+  // Legacy support
   '9988776655': 'Priya Singh',
   '5544332211': 'Vikram Mehra',
   '1234567890': 'Ananya Reddy',
-  '1212121212': 'Anonymous Shell Corp (Flagged)',
-  '5555555555': 'High-Velocity Merchant (Auth Required)',
+  '1212121212': 'Anonymous Entity (Flagged)',
+  '5555555555': 'High-Velocity Merchant',
 };
 
 export const BankProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [allUsers, setAllUsers] = useState<User[]>(() => {
-    const saved = localStorage.getItem('indus_all_users');
-    if (saved) return JSON.parse(saved);
-
-    // Initial default users
-    return [
-      {
-        id: 'current_user',
-        name: 'Prakash',
-        email: 'prakash@example.com',
-        bio: 'Fintech enthusiast & frequent traveler.',
-        accountNumber: '9876543210',
-        balance: 125000,
-        pin: '1234',
-        isRegistered: true,
-        role: 'admin',
-      },
-      {
-        id: 'user_2',
-        name: 'Aarav Sharma',
-        email: 'aarav@example.com',
-        bio: 'Professional investor.',
-        accountNumber: '1122334455',
-        balance: 850000,
-        pin: '0000',
-        isRegistered: true,
-        role: 'user'
-      },
-      {
-        id: 'user_3',
-        name: 'Priya Singh',
-        email: 'priya@example.com',
-        bio: 'Student at IIT Delhi.',
-        accountNumber: '9988776655',
-        balance: 12000,
-        pin: '0000',
-        isRegistered: true,
-        role: 'user'
-      }
-    ];
-  });
-
+  const [loading, setLoading] = useState(false);
+  const [allUsers, setAllUsers] = useState<User[]>([]);
   const [user, setUser] = useState<User>(() => {
     const saved = localStorage.getItem('indus_user');
-    if (saved) return JSON.parse(saved);
-    // Find the current_user from allUsers if no specific saved user
-    return allUsers.find(u => u.id === 'current_user')!;
+    return saved ? JSON.parse(saved) : {
+      id: 'current_user',
+      name: 'Prakash',
+      email: 'prakash@example.com',
+      bio: 'Fintech enthusiast & frequent traveler.',
+      accountNumber: '9876543210',
+      balance: 125000,
+      pin: '1234',
+      isRegistered: true,
+      role: 'admin',
+    };
   });
 
-  const [transactions, setTransactions] = useState<Transaction[]>(() => {
-    const saved = localStorage.getItem('indus_txs');
-    return saved ? JSON.parse(saved) : [
-      {
-        id: 'tx_1',
-        type: 'credit',
-        amount: 50000,
-        recipient: 'Employer Inc.',
-        accountNumber: '**** **** 1290',
-        date: new Date(Date.now() - 86400000 * 2).toISOString(),
-        status: 'completed',
-        category: 'Salary',
-      },
-      {
-        id: 'tx_2',
-        type: 'debit',
-        amount: 2500,
-        recipient: 'Amazon India',
-        accountNumber: '**** **** 8822',
-        date: new Date(Date.now() - 86400000).toISOString(),
-        status: 'completed',
-        category: 'Shopping',
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+
+  // 1. Initial Data Load (Supabase -> Local)
+  useEffect(() => {
+    const loadData = async () => {
+      if (!isSupabaseLive) {
+        // Load from LocalStorage if offline
+        const savedUsers = localStorage.getItem('indus_all_users');
+        const savedTxs = localStorage.getItem('indus_txs');
+        const savedNotifs = localStorage.getItem('indus_notifications');
+
+        if (savedUsers) setAllUsers(JSON.parse(savedUsers));
+        else setAllUsers([
+          user,
+          { id: 'user_2', name: 'Aarav Sharma', email: 'aarav@example.com', bio: 'Investor', accountNumber: '1122334455', balance: 850000, pin: '0000', isRegistered: true, role: 'user' },
+          { id: 'user_3', name: 'Priya Singh', email: 'priya@example.com', bio: 'Student', accountNumber: '9988776655', balance: 12000, pin: '0000', isRegistered: true, role: 'user' }
+        ]);
+
+        if (savedTxs) setTransactions(JSON.parse(savedTxs));
+        else setTransactions([
+          { id: 'tx_1', type: 'credit', amount: 50000, recipient: 'Employer Inc.', accountNumber: '**** 1290', date: new Date(Date.now() - 172800000).toISOString(), status: 'completed', category: 'Salary' },
+          { id: 'tx_2', type: 'debit', amount: 2500, recipient: 'Amazon India', accountNumber: '**** 8822', date: new Date(Date.now() - 86400000).toISOString(), status: 'completed', category: 'Shopping' }
+        ]);
+
+        if (savedNotifs) setNotifications(JSON.parse(savedNotifs));
+        else setNotifications([{ id: 'notif_1', title: 'Welcome!', message: 'biometric bank ready.', type: 'info', date: new Date().toISOString(), read: false }]);
+
+        return;
       }
-    ];
-  });
 
-  const [notifications, setNotifications] = useState<AppNotification[]>(() => {
-    const saved = localStorage.getItem('indus_notifications');
-    return saved ? JSON.parse(saved) : [
-      {
-        id: 'notif_1',
-        title: 'Welcome to Indus Mobile!',
-        message: 'Your biometric-secured digital bank is now ready for use.',
-        type: 'info',
-        date: new Date().toISOString(),
-        read: false,
+      setLoading(true);
+      try {
+        // Fetch User and Stats
+        const { data: profileData } = await supabase.from('profiles').select('*').eq('email', user.email).single();
+        if (profileData) {
+          const mappedUser: User = {
+            id: profileData.id,
+            name: profileData.name,
+            email: profileData.email,
+            bio: profileData.bio,
+            accountNumber: profileData.account_number,
+            balance: Number(profileData.balance),
+            pin: profileData.pin,
+            isRegistered: profileData.is_registered,
+            role: profileData.role
+          };
+          setUser(mappedUser);
+        }
+
+        const { data: txs } = await supabase.from('transactions').select('*').order('created_at', { ascending: false });
+        if (txs) {
+          setTransactions(txs.map(t => ({
+            id: t.id,
+            type: t.type,
+            amount: Number(t.amount),
+            recipient: t.recipient,
+            accountNumber: t.account_number,
+            date: t.created_at,
+            status: t.status,
+            category: t.category
+          })));
+        }
+
+        const { data: notifs } = await supabase.from('notifications').select('*').order('created_at', { ascending: false });
+        if (notifs) {
+          setNotifications(notifs.map(n => ({
+            id: n.id,
+            title: n.title,
+            message: n.message,
+            type: n.type,
+            date: n.created_at,
+            read: n.read
+          })));
+        }
+
+        const { data: users } = await supabase.from('profiles').select('*');
+        if (users) {
+          setAllUsers(users.map(u => ({
+            id: u.id,
+            name: u.name,
+            email: u.email,
+            bio: u.bio,
+            accountNumber: u.account_number,
+            balance: Number(u.balance),
+            pin: u.pin,
+            isRegistered: u.is_registered,
+            role: u.role
+          })));
+        }
+      } catch (err) {
+        console.error('Supabase fetch error:', err);
+      } finally {
+        setLoading(false);
       }
-    ];
-  });
+    };
 
-  const [loading, setLoading] = useState(false);
+    loadData();
+  }, [user.email]);
 
-  const addNotification = useCallback((title: string, message: string, type: AppNotification['type']) => {
+  const addNotification = useCallback(async (title: string, message: string, type: AppNotification['type']) => {
     const newNotif: AppNotification = {
       id: `notif_${Date.now()}`,
       title,
@@ -138,11 +182,24 @@ export const BankProvider: React.FC<{ children: React.ReactNode }> = ({ children
       date: new Date().toISOString(),
       read: false,
     };
+    
     setNotifications(prev => [newNotif, ...prev]);
-  }, []);
 
-  const markNotificationRead = useCallback((id: string) => {
+    if (isSupabaseLive) {
+      await supabase.from('notifications').insert({
+        title,
+        message,
+        type,
+        user_id: user.id === 'current_user' ? null : user.id,
+      });
+    }
+  }, [user.id]);
+
+  const markNotificationRead = useCallback(async (id: string) => {
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+    if (isSupabaseLive) {
+      await supabase.from('notifications').update({ read: true }).eq('id', id);
+    }
   }, []);
 
   // --- Kafka Event Stream Listener ---
@@ -186,12 +243,16 @@ export const BankProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem('indus_all_users', JSON.stringify(allUsers));
   }, [user, transactions, notifications, allUsers]);
 
-  const updateUserRole = useCallback((userId: string, role: User['role']) => {
+  const updateUserRole = useCallback(async (userId: string, role: User['role']) => {
     setAllUsers(prev => prev.map(u => u.id === userId ? { ...u, role } : u));
     
     // If the updated user is the current user, update their profile too
     if (userId === user.id) {
       setUser(prev => ({ ...prev, role }));
+    }
+
+    if (isSupabaseLive) {
+      await supabase.from('profiles').update({ role }).eq('id', userId);
     }
 
     const updatedUserName = allUsers.find(u => u.id === userId)?.name || 'User';
@@ -202,14 +263,22 @@ export const BankProvider: React.FC<{ children: React.ReactNode }> = ({ children
     );
   }, [user.id, allUsers, addNotification]);
 
-  const register = useCallback(() => {
+  const register = useCallback(async () => {
     setUser(prev => ({ ...prev, isRegistered: true }));
     setAllUsers(prev => prev.map(u => u.id === user.id ? { ...u, isRegistered: true } : u));
+    
+    if (isSupabaseLive) {
+      await supabase.from('profiles').update({ is_registered: true }).eq('id', user.id);
+    }
   }, [user.id]);
 
-  const updateProfile = useCallback((name: string, email: string, bio: string) => {
+  const updateProfile = useCallback(async (name: string, email: string, bio: string) => {
     setUser(prev => ({ ...prev, name, email, bio }));
     setAllUsers(prev => prev.map(u => u.id === user.id ? { ...u, name, email, bio } : u));
+
+    if (isSupabaseLive) {
+      await supabase.from('profiles').update({ name, email, bio }).eq('id', user.id);
+    }
   }, [user.id]);
 
   const sendOTP = async () => {
@@ -222,6 +291,19 @@ export const BankProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const verifyRecipient = async (accNumber: string) => {
     setLoading(true);
+
+    if (isSupabaseLive) {
+      try {
+        const { data } = await supabase.from('profiles').select('name').eq('account_number', accNumber).single();
+        if (data) {
+          setLoading(false);
+          return { exists: true, name: data.name };
+        }
+      } catch (err) {
+        console.error('Supabase recipient verify error:', err);
+      }
+    }
+
     try {
       // 1. Try real API first
       const resp = await fetch(`/api/users/check/${accNumber}`);
@@ -257,30 +339,43 @@ export const BankProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (resp.ok) return await resp.json();
       throw new Error('API Error');
     } catch (error) {
-      // ENHANCED SIMULATION FOR TESTING (Vercel/Offline Support)
+      // ENHANCED SIMULATION FOR PRESENTATION & TESTING
       await new Promise(r => setTimeout(r, 800));
 
-      // 1. Explicit High-Risk Test Scenario
-      if (accNumber === '1212121212' || amount > 100000) {
-        console.warn('[Bank AI] HIGH RISK Triggered (Local Simulation)');
+      // 1. HIGH RISK: BLOCKED PERSONS
+      const highRiskAccounts = ['8888888888', '7777777777', '1212121212', '5432167890'];
+      if (highRiskAccounts.includes(accNumber || '') || amount > 100000) {
+        let reason = 'Entity detected in AML blacklist (High-Risk Flag).';
+        if (accNumber === '7777777777') reason = 'Unauthorized Crypto Gateway: Potential capital flight risk.';
+        if (accNumber === '8888888888') reason = 'Sanctioned Entity Trace: Transaction blocked by global compliance.';
+        if (accNumber === '5432167890') reason = 'Associated with fraudulent activity in the last 24 hours.';
+        
+        console.warn('[Bank AI] HIGH RISK Triggered:', reason);
+        return { fraud_score: 0.98, risk_level: 'HIGH', reason };
+      }
+
+      // 2. MEDIUM RISK: 2FA PERSONS (Review Required)
+      const mediumRiskAccounts = ['6666666666', '5555555555', '3456723452'];
+      if (mediumRiskAccounts.includes(accNumber || '') || amount > 25000) {
+        let reason = 'Transaction exceeds typical user velocity patterns.';
+        if (accNumber === '6666666666') reason = 'Unexpected geographic merchant location at this tier.';
+        if (accNumber === '3456723452') reason = 'New first-time merchant pairing; additional verification requested.';
+        
+        console.warn('[Bank AI] MEDIUM RISK Triggered:', reason);
+        return { fraud_score: 0.65, risk_level: 'MEDIUM', reason };
+      }
+
+      // 3. LOW RISK: AUTHORIZED PERSONS
+      const lowRiskAccounts = ['1122334455', '2233445566', '3344556677', '2220502205', '3789678934'];
+      if (lowRiskAccounts.includes(accNumber || '')) {
         return { 
-          fraud_score: 0.98, 
-          risk_level: 'HIGH', 
-          reason: 'Entity detected in AML blacklist (High-Risk Flag).' 
+          fraud_score: 0.02, 
+          risk_level: 'LOW', 
+          reason: 'Verified counterparty. Consistent with historical behavior.' 
         };
       }
 
-      // 2. Explicit Medium-Risk Test Scenario (Triggers 2FA)
-      if (accNumber === '5555555555' || amount > 25000) {
-        console.warn('[Bank AI] MEDIUM RISK Triggered (Local Simulation)');
-        return { 
-          fraud_score: 0.65, 
-          risk_level: 'MEDIUM', 
-          reason: 'Transaction exceeds typical user velocity patterns.' 
-        };
-      }
-
-      // 3. Default Low Risk
+      // Default
       return { 
         fraud_score: 0.05, 
         risk_level: 'LOW', 
@@ -309,9 +404,23 @@ export const BankProvider: React.FC<{ children: React.ReactNode }> = ({ children
       category: 'Transfer',
     };
 
-    setUser(prev => ({ ...prev, balance: prev.balance - amount }));
+    const newBalance = user.balance - amount;
+    setUser(prev => ({ ...prev, balance: newBalance }));
     setAllUsers(prev => prev.map(u => u.id === user.id ? { ...u, balance: u.balance - amount } : u));
     setTransactions(prev => [newTx, ...prev]);
+
+    if (isSupabaseLive) {
+      await supabase.from('profiles').update({ balance: newBalance }).eq('id', user.id);
+      await supabase.from('transactions').insert({
+        user_id: user.id === 'current_user' ? null : user.id,
+        type: 'debit',
+        amount,
+        recipient: recipientName,
+        account_number: recipientAcc,
+        category: 'Transfer'
+      });
+    }
+
     setLoading(false);
     return true;
   };
@@ -331,14 +440,33 @@ export const BankProvider: React.FC<{ children: React.ReactNode }> = ({ children
       category: 'Salary', // Using Salary as a filler for deposit category
     };
 
-    setUser(prev => ({ ...prev, balance: prev.balance + amount }));
+    const newBalance = user.balance + amount;
+    setUser(prev => ({ ...prev, balance: newBalance }));
     setAllUsers(prev => prev.map(u => u.id === user.id ? { ...u, balance: u.balance + amount } : u));
     setTransactions(prev => [newTx, ...prev]);
+
+    if (isSupabaseLive) {
+      await supabase.from('profiles').update({ balance: newBalance }).eq('id', user.id);
+      await supabase.from('transactions').insert({
+        user_id: user.id === 'current_user' ? null : user.id,
+        type: 'credit',
+        amount,
+        recipient: 'Self (Deposit)',
+        account_number: user.accountNumber,
+        category: 'Salary'
+      });
+    }
+
     setLoading(false);
   };
 
-  const updateTransactionStatus = (txId: string, status: Transaction['status']) => {
+  const updateTransactionStatus = async (txId: string, status: Transaction['status']) => {
     setTransactions(prev => prev.map(tx => tx.id === txId ? { ...tx, status } : tx));
+    
+    if (isSupabaseLive) {
+      await supabase.from('transactions').update({ status }).eq('id', txId);
+    }
+
     if (status === 'flagged') {
       addNotification(
         'Transaction Flagged',
